@@ -13,6 +13,12 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   CLERK_PUBLISHABLE_KEY: z.string().startsWith("pk_", "Must be your Clerk publishable key (pk_...)"),
   CLERK_SECRET_KEY: z.string().startsWith("sk_", "Must be your Clerk secret key (sk_...)"),
+  GOOGLE_CLIENT_ID: z.string().min(1, "GOOGLE_CLIENT_ID is required"),
+  GOOGLE_CLIENT_SECRET: z.string().min(1, "GOOGLE_CLIENT_SECRET is required"),
+  GOOGLE_REDIRECT_URI: z.string().url().default("http://localhost:5173/app/settings"),
+  TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, "Must be exactly 64 hex characters. Generate with: openssl rand -hex 32"),
 });
 
 const parsed = schema.safeParse(process.env);

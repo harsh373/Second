@@ -8,6 +8,7 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Onboarding from "./pages/Onboarding";
+import Settings from "./pages/Settings";
 import Signup from "./pages/Signup";
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/app" element={<AppShell />}>
             <Route index element={<Desk />} />
+            <Route path="settings" element={<Settings />} />
             <Route path="design" element={<Design />} />
           </Route>
         </Route>

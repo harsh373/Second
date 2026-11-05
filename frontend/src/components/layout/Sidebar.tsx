@@ -1,5 +1,5 @@
 import { Link, NavLink } from "react-router-dom";
-import { LayoutDashboard, Palette, X, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Palette, Settings, X, type LucideIcon } from "lucide-react";
 import { cn } from "../../utility/cn";
 
 interface NavItem {
@@ -10,7 +10,10 @@ interface NavItem {
 }
 
 // Only features that exist get a link. Add entries as each feature ships.
-const NAV_ITEMS: NavItem[] = [{ to: "/app", label: "Desk", icon: LayoutDashboard, end: true }];
+const NAV_ITEMS: NavItem[] = [
+  { to: "/app", label: "Desk", icon: LayoutDashboard, end: true },
+  { to: "/app/settings", label: "Settings", icon: Settings },
+];
 const DEV_ITEMS: NavItem[] = [{ to: "/app/design", label: "Design system", icon: Palette }];
 
 function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate: () => void }) {
