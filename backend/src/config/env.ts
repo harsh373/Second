@@ -11,6 +11,8 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  CLERK_PUBLISHABLE_KEY: z.string().startsWith("pk_", "Must be your Clerk publishable key (pk_...)"),
+  CLERK_SECRET_KEY: z.string().startsWith("sk_", "Must be your Clerk secret key (sk_...)"),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -21,4 +23,4 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const env = parsed.data;  
+export const env = parsed.data;

@@ -1,3 +1,4 @@
+import { UserButton } from "@clerk/react";
 import { Menu } from "lucide-react";
 import { SystemStatus } from "./SystemStatus";
 
@@ -17,7 +18,10 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         </button>
         <span className="text-sm text-ink-muted">{today}</span>
       </div>
-      <SystemStatus />
+      <div className="flex items-center gap-4">
+        <SystemStatus />
+        <UserButton />
+      </div>
     </header>
   );
 }

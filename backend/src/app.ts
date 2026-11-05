@@ -1,6 +1,8 @@
+import { clerkMiddleware } from "@clerk/express";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
+import "./config/env"; // loads backend/.env before Clerk reads its keys
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { apiRouter } from "./routes/index";
 import { logger } from "./utility/logger";
@@ -22,6 +24,9 @@ app.use((req, res, next) => {
 app.use(helmet());
 app.use(cors({ origin: ["http://localhost:5173"], credentials: true }));
 app.use(express.json({ limit: "1mb" }));
+
+// Reads the Bearer token and makes the session available. It does not block anyone by itself.
+app.use(clerkMiddleware());
 
 app.use("/api", apiRouter);
 
