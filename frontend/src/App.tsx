@@ -2,10 +2,13 @@ import { Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { AppShell } from "./components/layout/AppShell";
 import { Toaster } from "./components/ui/Toast";
+import Chat from "./pages/Chat";
 import Desk from "./pages/Desk";
 import Design from "./pages/Design";
+import GoogleDebug from "./pages/GoogleDebug";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
+import Memory from "./pages/Memory";
 import NotFound from "./pages/NotFound";
 import Onboarding from "./pages/Onboarding";
 import Settings from "./pages/Settings";
@@ -24,8 +27,11 @@ export default function App() {
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/app" element={<AppShell />}>
             <Route index element={<Desk />} />
+            <Route path="chat/:conversationId?" element={<Chat />} />
+            <Route path="memory" element={<Memory />} />
             <Route path="settings" element={<Settings />} />
             <Route path="design" element={<Design />} />
+            {import.meta.env.DEV && <Route path="dev/google" element={<GoogleDebug />} />}
           </Route>
         </Route>
 

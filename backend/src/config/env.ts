@@ -19,6 +19,8 @@ const schema = z.object({
   TOKEN_ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, "Must be exactly 64 hex characters. Generate with: openssl rand -hex 32"),
+  GROQ_API_KEY: z.string().min(1, "GROQ_API_KEY is required (create one at console.groq.com)"),
+  GROQ_MODEL: z.string().min(1).default("openai/gpt-oss-120b"),
 });
 
 const parsed = schema.safeParse(process.env);
