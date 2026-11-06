@@ -1,5 +1,17 @@
 import { Link, NavLink } from "react-router-dom";
-import { Brain, Bug, LayoutDashboard, MessageSquare, Palette, Settings, X, type LucideIcon } from "lucide-react";
+import {
+  Brain,
+  Bug,
+  Inbox,
+  LayoutDashboard,
+  ListChecks,
+  MessageSquare,
+  Palette,
+  Settings,
+  Users,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "../../utility/cn";
 
 interface NavItem {
@@ -13,6 +25,9 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: "/app", label: "Desk", icon: LayoutDashboard, end: true },
   { to: "/app/chat", label: "Chat", icon: MessageSquare },
+  { to: "/app/commitments", label: "Commitments", icon: ListChecks },
+  { to: "/app/open-loops", label: "Open loops", icon: Inbox },
+  { to: "/app/people", label: "People", icon: Users },
   { to: "/app/memory", label: "Memory", icon: Brain },
   { to: "/app/settings", label: "Settings", icon: Settings },
 ];

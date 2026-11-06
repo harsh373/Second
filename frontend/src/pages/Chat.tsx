@@ -1,9 +1,23 @@
 import { useAuth } from "@clerk/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Brain, Check, MessageSquare, Plus, RotateCcw, Send, Square, Trash2, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Brain,
+  Check,
+  ListChecks,
+  MessageSquare,
+  Plus,
+  RotateCcw,
+  Send,
+  Square,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
+import { deleteCommitment, formatDue } from "../api/commitments.api";
 import {
   conversationKey,
   conversationQueryOptions,
@@ -13,20 +27,25 @@ import {
   streamReply,
   type ChatMessage,
   type ConversationDetail,
+  type SavedCommitmentNote,
   type SavedMemoryNote,
+  type SavedPersonNote,
   type ToolCallView,
 } from "../api/conversations.api";
 import { deleteMemory } from "../api/memories.api";
+import { deletePerson, setPersonLabel } from "../api/people.api";
 import { meQueryOptions } from "../api/user.api";
 import { toast } from "../components/ui/Toast";
 import { cn } from "../utility/cn";
 
-// Second can read Gmail and Calendar (read-only) and remembers what you tell it.
+// Second can read Gmail, Calendar, your commitments and your people (read-only) and remembers what you tell it.
 const SUGGESTIONS = [
+  "What should I focus on today?",
   "What emails am I waiting on?",
   "What do I need to reply to?",
   "What's on my calendar tomorrow?",
   "When am I free for 1 hour this week?",
+  "Who have I emailed recently?",
   "What do you remember about me?",
 ];
 
@@ -173,6 +192,69 @@ function MemoryNotes({ notes, onUndo }: { notes: SavedMemoryNote[]; onUndo: (not
   );
 }
 
+function CommitmentNotes({
+  notes,
+  onUndo,
+}: {
+  notes: SavedCommitmentNote[];
+  onUndo: (note: SavedCommitmentNote) => void;
+}) {
+  if (notes.length === 0) return null;
+  return (
+    <div className="max-w-[85%] space-y-1">
+      {notes.map((n) => {
+        const details = [
+          n.matter,
+          n.dueDate ? `due ${formatDue(n.dueDate)}` : null,
+          n.status === "waiting" ? (n.waitingOn ? `waiting on ${n.waitingOn}` : "waiting") : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <div key={n.id} className="flex items-start gap-2 text-xs text-ink-muted">
+            <ListChecks className="mt-0.5 size-3.5 shrink-0 text-accent" aria-hidden />
+            <span className="min-w-0 flex-1 break-words">
+              Tracked: {n.title}
+              {details ? ` (${details})` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => onUndo(n)}
+              className="shrink-0 cursor-pointer font-medium text-accent hover:underline"
+            >
+              Undo
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PersonNotes({ notes, onUndo }: { notes: SavedPersonNote[]; onUndo: (note: SavedPersonNote) => void }) {
+  if (notes.length === 0) return null;
+  return (
+    <div className="max-w-[85%] space-y-1">
+      {notes.map((n) => (
+        <div key={n.id} className="flex items-start gap-2 text-xs text-ink-muted">
+          <Users className="mt-0.5 size-3.5 shrink-0 text-accent" aria-hidden />
+          <span className="min-w-0 flex-1 break-words">
+            {n.action === "relabelled" ? "Updated person: " : "Noted: "}
+            {n.name} ({n.label})
+          </span>
+          <button
+            type="button"
+            onClick={() => onUndo(n)}
+            className="shrink-0 cursor-pointer font-medium text-accent hover:underline"
+          >
+            Undo
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Chat() {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
@@ -182,6 +264,8 @@ export default function Chat() {
   const [stream, setStream] = useState<StreamState | null>(null);
   const [toolsByMessage, setToolsByMessage] = useState<Record<string, ToolCallView[]>>({});
   const [notesByMessage, setNotesByMessage] = useState<Record<string, SavedMemoryNote[]>>({});
+  const [trackedByMessage, setTrackedByMessage] = useState<Record<string, SavedCommitmentNote[]>>({});
+  const [peopleByMessage, setPeopleByMessage] = useState<Record<string, SavedPersonNote[]>>({});
   const [draft, setDraft] = useState("");
   const [showList, setShowList] = useState(false); // mobile only: list vs chat
   const abortRef = useRef<AbortController | null>(null);
@@ -220,6 +304,8 @@ export default function Chat() {
     activeStream?.status,
     activeStream?.tools,
     notesByMessage,
+    trackedByMessage,
+    peopleByMessage,
     conversationId,
     detail.isSuccess,
   ]);
@@ -285,6 +371,20 @@ export default function Chat() {
           setNotesByMessage((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), ...notes] }));
           void qc.invalidateQueries({ queryKey: ["memories"] });
         },
+        // Same, for commitments Second started tracking.
+        onCommitments: (notes) => {
+          const key = savedId;
+          if (!key) return;
+          setTrackedByMessage((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), ...notes] }));
+          void qc.invalidateQueries({ queryKey: ["commitments"] });
+        },
+        // Same, for relationships the user stated.
+        onPeople: (notes) => {
+          const key = savedId;
+          if (!key) return;
+          setPeopleByMessage((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), ...notes] }));
+          void qc.invalidateQueries({ queryKey: ["people"] });
+        },
       });
     } catch (err) {
       if (controller.signal.aborted) {
@@ -348,6 +448,37 @@ export default function Chat() {
       toast.success("Memory removed.");
     } catch {
       toast.error("Could not remove that memory.");
+    }
+  }
+
+  async function undoCommitment(messageId: string, note: SavedCommitmentNote) {
+    try {
+      await deleteCommitment(note.id);
+      setTrackedByMessage((prev) => ({
+        ...prev,
+        [messageId]: (prev[messageId] ?? []).filter((n) => n.id !== note.id),
+      }));
+      void qc.invalidateQueries({ queryKey: ["commitments"] });
+      toast.success("Commitment removed.");
+    } catch {
+      toast.error("Could not remove that commitment.");
+    }
+  }
+
+  // created: the person did not exist before, so delete them. labelled: clear the label only.
+  // relabelled: put the previous label back. An existing person is never deleted by Undo.
+  async function undoPerson(messageId: string, note: SavedPersonNote) {
+    try {
+      if (note.action === "created") await deletePerson(note.id);
+      else await setPersonLabel(note.id, note.action === "relabelled" ? note.previousLabel : null);
+      setPeopleByMessage((prev) => ({
+        ...prev,
+        [messageId]: (prev[messageId] ?? []).filter((n) => n.id !== note.id),
+      }));
+      void qc.invalidateQueries({ queryKey: ["people"] });
+      toast.success("Undone.");
+    } catch {
+      toast.error("Could not undo that.");
     }
   }
 
@@ -473,8 +604,9 @@ export default function Chat() {
               <div className="space-y-2">
                 <h2 className="font-display text-3xl">{firstName ? `What's on your mind, ${firstName}?` : "What's on your mind?"}</h2>
                 <p className="text-sm text-ink-muted">
-                  I can read your Gmail and calendar once Google is connected in Settings, and I remember lasting facts
-                  you tell me (see Memory). I can&apos;t send or change anything.
+                  I can read your Gmail and calendar once Google is connected in Settings. I remember lasting facts you
+                  tell me (see Memory), keep track of things you say you need to do (see Commitments), and note how you
+                  say people relate to you (see People). I can&apos;t send or change anything outside this app.
                 </p>
               </div>
               <div className="flex flex-wrap justify-center gap-2">
@@ -496,6 +628,8 @@ export default function Chat() {
           {messages.map((m) => {
             const used = toolsByMessage[m.id];
             const notes = notesByMessage[m.id];
+            const tracked = trackedByMessage[m.id];
+            const noted = peopleByMessage[m.id];
             return (
               <div key={m.id} className="space-y-2">
                 {used && <ToolCards tools={used} />}
@@ -503,6 +637,10 @@ export default function Chat() {
                   <Linkified text={m.content} />
                 </Bubble>
                 {notes && notes.length > 0 && <MemoryNotes notes={notes} onUndo={(n) => void undoMemory(m.id, n)} />}
+                {tracked && tracked.length > 0 && (
+                  <CommitmentNotes notes={tracked} onUndo={(n) => void undoCommitment(m.id, n)} />
+                )}
+                {noted && noted.length > 0 && <PersonNotes notes={noted} onUndo={(n) => void undoPerson(m.id, n)} />}
               </div>
             );
           })}

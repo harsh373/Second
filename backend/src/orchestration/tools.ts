@@ -1,12 +1,19 @@
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
+import { loadCommitmentViews, todayForUser, type CommitmentView } from "../model/commitment.model";
+import { getLastScanAt, listActiveLoops } from "../model/openLoop.model";
+import { loadPeopleViews, type PersonView } from "../model/people.model";
+import { AppError } from "../utility/AppError";
 import { findConflicts, findFreeSlots, getEvent, listEvents, resolveWindow } from "../utility/calendar";
 import { findUnansweredThreads, getThread, searchByPerson, searchThreads } from "../utility/gmail";
 
 const MAX_OUTPUT_CHARS = 12_000;
 const BODY_CHARS_PER_MESSAGE = 1_500;
 const MAX_THREAD_MESSAGES = 6;
+const MAX_COMMITMENTS_SHOWN = 30;
+const MAX_LOOPS_SHOWN = 30;
+const MAX_PEOPLE_SHOWN = 30;
 
 // The user id comes from the backend (set per request), never from the model's arguments.
 function userIdOf(config?: RunnableConfig): string {
@@ -101,7 +108,7 @@ const searchByPersonTool = tool(
   {
     name: "search_by_person",
     description:
-      "Find Gmail threads where a person is the sender, a recipient or in CC. Give an email address, or a name if no address is known.",
+      "Find Gmail threads where a person is the sender, a recipient or in CC. Give an email address, or a name if no address is known. This is a live Gmail search.",
     schema: z.object({
       person: z.string().describe("Email address or name of the person."),
       maxResults: z.number().optional().describe("How many threads to return. Default 10, maximum 20."),
@@ -120,7 +127,7 @@ const findUnansweredTool = tool(
   {
     name: "find_unanswered_threads",
     description:
-      "Rule-based scan of recent Gmail. Returns needsReply (threads where someone wrote to the user last and the user has not answered) and waitingOn (threads where the user wrote last and got no answer). Use this for questions like 'what do I need to reply to' or 'what am I waiting on'. These lists are heuristics, not certainty.",
+      "Live rule-based scan of recent Gmail. Returns needsReply (threads where someone wrote to the user last and the user has not answered) and waitingOn (threads where the user wrote last and got no answer). Use this for a fresh check of the inbox, for questions like 'what do I need to reply to' or 'what am I waiting on'. These lists are heuristics, not certainty.",
     schema: z.object({
       sinceDays: z.number().optional().describe("How many days back to scan. Default 14, maximum 60."),
       waitingDays: z
@@ -218,6 +225,187 @@ const findConflictsTool = tool(
   },
 );
 
+// ---- Commitments (the user's own tracked list, read-only) ----
+
+function slimCommitment(v: CommitmentView) {
+  return {
+    id: v.id,
+    title: v.title,
+    status: v.status,
+    waitingOn: v.waitingOn,
+    dueDate: v.dueDate,
+    impact: v.impact,
+    matter: v.matter?.title ?? null,
+    mustFinishFirst: v.dependsOn.map((d) => ({ title: d.title, status: d.status })),
+    unblocks: v.dependents.map((d) => ({ title: d.title, status: d.status })),
+    priority: v.priority
+      ? {
+          score: v.priority.score,
+          band: v.priority.band,
+          factors: v.priority.factors.map((f) => ({ label: f.label, points: f.points, detail: f.detail })),
+        }
+      : null,
+  };
+}
+
+const listCommitmentsTool = tool(
+  async ({ includeDone }, config) => {
+    const userId = userIdOf(config);
+    const { today } = await todayForUser(userId);
+    const all = await loadCommitmentViews(userId, today);
+    const shown = (includeDone ? all : all.filter((c) => c.status !== "done")).slice(0, MAX_COMMITMENTS_SHOWN);
+    return limit({ today, totalTracked: all.length, commitments: shown.map(slimCommitment) });
+  },
+  {
+    name: "list_commitments",
+    description:
+      "List the commitments the user is tracking (things they must do, owe, or are waiting on others for), highest priority first. Each has a priority score with the factors behind it. Use it for questions like 'what should I focus on', 'what is due this week' or 'what am I blocked on'. Read-only.",
+    schema: z.object({
+      includeDone: z.boolean().optional().describe("Also include finished commitments. Default false."),
+    }),
+  },
+);
+
+const getCommitmentTool = tool(
+  async ({ id }, config) => {
+    const userId = userIdOf(config);
+    const { today } = await todayForUser(userId);
+    const all = await loadCommitmentViews(userId, today);
+    const found = all.find((c) => c.id === id);
+    if (!found) throw new AppError(404, "No tracked commitment has that id.", "COMMITMENT_NOT_FOUND");
+    return limit(slimCommitment(found));
+  },
+  {
+    name: "get_commitment",
+    description: "Get one tracked commitment with its priority breakdown. The id must come from list_commitments.",
+    schema: z.object({ id: z.string().describe("The commitment id from list_commitments.") }),
+  },
+);
+
+// ---- Open loops (saved list built by the user's inbox scans, read-only, does not call Gmail) ----
+
+const listOpenLoopsTool = tool(
+  async ({ kind }, config) => {
+    const userId = userIdOf(config);
+    const [{ today }, rows, lastScanAt] = await Promise.all([
+      todayForUser(userId),
+      listActiveLoops(userId, 100),
+      getLastScanAt(userId),
+    ]);
+    const wanted = kind === "needs_reply" || kind === "waiting_on" ? kind : null;
+    const now = Date.now();
+
+    const loops = rows
+      .filter((r) => wanted === null || r.kind === wanted)
+      .sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind === "needs_reply" ? -1 : 1;
+        return a.triggerAt.getTime() - b.triggerAt.getTime();
+      })
+      .slice(0, MAX_LOOPS_SHOWN)
+      .map((r) => ({
+        kind: r.kind,
+        subject: r.subject,
+        counterpart: r.counterpart,
+        daysOpen: Math.max(0, Math.floor((now - r.triggerAt.getTime()) / 86_400_000)),
+        snoozedUntil: r.snoozedUntil !== null && r.snoozedUntil > today ? r.snoozedUntil : null,
+        sourceUrl: r.sourceUrl,
+      }));
+
+    return limit({
+      today,
+      lastScanAt: lastScanAt ? lastScanAt.toISOString() : null,
+      note: "Saved list from the user's last inbox scan, not live. Finished loops are not shown. kind needs_reply means someone wrote to the user last. kind waiting_on means the user wrote last.",
+      count: loops.length,
+      loops,
+    });
+  },
+  {
+    name: "list_open_loops",
+    description:
+      "List the user's open loops: email threads saved from their last inbox scan that look unfinished (needs_reply: someone wrote last and the user has not answered; waiting_on: the user wrote last and got no answer), oldest first, including ones the user snoozed. Use it for 'what is hanging over me', 'what did I snooze' or 'how long has X been waiting'. It reads the saved list and does NOT check Gmail, so also report lastScanAt. For a fresh live check use find_unanswered_threads. Read-only.",
+    schema: z.object({
+      kind: z.string().optional().describe("needs_reply or waiting_on. Leave out for both."),
+    }),
+  },
+);
+
+// ---- People (saved list built by the user's Refresh people action and by what they said in chat, read-only) ----
+
+function slimPerson(p: PersonView, withThreads: boolean) {
+  return {
+    id: p.id,
+    name: p.name,
+    email: p.email,
+    relationship: p.relationship
+      ? {
+          label: p.relationship.label,
+          source: p.relationship.source === "manual" ? "set by the user" : "stated by the user in chat",
+        }
+      : null,
+    savedThreads: p.interactionCount,
+    lastContactAt: p.lastContactAt,
+    lastMessageWrittenBy: p.lastDirection === "from" ? "them" : p.lastDirection === "to" ? "the user" : null,
+    savedThreadsThatAreOpenLoops: p.openLoopCount,
+    ...(withThreads
+      ? {
+          threads: p.interactions.map((i) => ({
+            subject: i.subject,
+            lastMessageAt: i.lastMessageAt,
+            lastMessageWrittenBy: i.direction === "from" ? "them" : "the user",
+            messageCount: i.messageCount,
+            openLoop: i.openLoop,
+            sourceUrl: i.sourceUrl,
+          })),
+        }
+      : {}),
+  };
+}
+
+const PEOPLE_NOTE =
+  "Saved list, not live. It is built from Gmail headers when the user presses Refresh people (recent threads only) and from people the user named in chat. A relationship label exists ONLY if the user stated or set it: when relationship is null, how this person relates to the user is unknown. Counts and dates are facts about saved email threads, not a measure of closeness or importance.";
+
+const listPeopleTool = tool(
+  async ({ query }, config) => {
+    const userId = userIdOf(config);
+    const all = await loadPeopleViews(userId, { interactionsShown: 0 });
+    const q = query?.trim().toLowerCase();
+    const matched = q
+      ? all.filter(
+          (p) =>
+            (p.name ?? "").toLowerCase().includes(q) ||
+            (p.email ?? "").toLowerCase().includes(q) ||
+            (p.relationship?.label ?? "").toLowerCase().includes(q),
+        )
+      : all;
+    const shown = matched.slice(0, MAX_PEOPLE_SHOWN);
+    return limit({ note: PEOPLE_NOTE, totalSaved: all.length, count: shown.length, people: shown.map((p) => slimPerson(p, false)) });
+  },
+  {
+    name: "list_people",
+    description:
+      "List the people saved on the user's People page, most recent contact first: name, email, the relationship ONLY if the user stated it, how many saved email threads, the last contact date and who wrote last. Use it for 'who have I emailed lately', 'who is X' or 'who is my <relationship>'. It reads the saved list and does NOT check Gmail. Read-only.",
+    schema: z.object({
+      query: z.string().optional().describe("Part of a name, email address or relationship to filter by. Leave out for everyone."),
+    }),
+  },
+);
+
+const getPersonTool = tool(
+  async ({ id }, config) => {
+    const parsedId = z.string().uuid().safeParse(id);
+    if (!parsedId.success) throw new AppError(404, "No saved person has that id.", "PERSON_NOT_FOUND");
+    const [found] = await loadPeopleViews(userIdOf(config), { id: parsedId.data, interactionsShown: 20 });
+    if (!found) throw new AppError(404, "No saved person has that id.", "PERSON_NOT_FOUND");
+    return limit({ note: PEOPLE_NOTE, person: slimPerson(found, true) });
+  },
+  {
+    name: "get_person",
+    description:
+      "Get one saved person with their recent saved email threads (subject, date, who wrote last, whether the thread is an open loop, source link). The id must come from list_people. Read-only.",
+    schema: z.object({ id: z.string().describe("The person id from list_people.") }),
+  },
+);
+
 export const agentTools = [
   searchThreadsTool,
   getThreadTool,
@@ -227,6 +415,11 @@ export const agentTools = [
   getEventTool,
   findFreeSlotsTool,
   findConflictsTool,
+  listCommitmentsTool,
+  getCommitmentTool,
+  listOpenLoopsTool,
+  listPeopleTool,
+  getPersonTool,
 ];
 
 // ---- Helpers the graph uses to describe calls and results to the user (not the model) ----
@@ -256,6 +449,16 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
       return "Finding free time on your calendar";
     case "find_conflicts":
       return "Looking for calendar conflicts";
+    case "list_commitments":
+      return "Checking your commitments";
+    case "get_commitment":
+      return "Opening a commitment";
+    case "list_open_loops":
+      return "Checking your open loops";
+    case "list_people":
+      return "Checking your people";
+    case "get_person":
+      return "Opening a person";
     default:
       return `Running ${name}`;
   }

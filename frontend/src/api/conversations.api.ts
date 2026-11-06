@@ -37,6 +37,26 @@ export interface SavedMemoryNote {
   action: "created" | "updated";
 }
 
+// A commitment Second started tracking after a reply.
+export interface SavedCommitmentNote {
+  id: string;
+  title: string;
+  status: "open" | "waiting";
+  waitingOn: string | null;
+  dueDate: string | null;
+  matter: string | null;
+}
+
+// A relationship the user stated, noted after a reply.
+// created: a new person was added. labelled: an existing person got a label. relabelled: an existing label was replaced.
+export interface SavedPersonNote {
+  id: string;
+  name: string;
+  label: string;
+  action: "created" | "labelled" | "relabelled";
+  previousLabel: string | null;
+}
+
 export const getConversations = () => apiFetch<{ conversations: ConversationSummary[] }>("/conversations");
 
 export const createConversation = () =>
@@ -70,12 +90,14 @@ type StreamEvent =
   | { type: "tool_start"; callId: string; name: string; label: string }
   | { type: "tool_result"; callId: string; name: string; ok: boolean; summary: string; links: string[] }
   | { type: "memory"; memories: SavedMemoryNote[] }
+  | { type: "commitments"; commitments: SavedCommitmentNote[] }
+  | { type: "people"; people: SavedPersonNote[] }
   | { type: "done"; message: ChatMessage }
   | { type: "error"; message: string };
 
 // Sends a message (or, with no content, retries the unanswered one) and streams the reply.
 // onDone fires as soon as the reply is complete. The stream may stay open a little longer
-// for a "memory" event, which is optional: problems after onDone are ignored.
+// for "memory", "commitments" and "people" events, which are optional: problems after onDone are ignored.
 export async function streamReply(args: {
   conversationId: string;
   content?: string | undefined;
@@ -86,6 +108,8 @@ export async function streamReply(args: {
   onToolResult: (e: { callId: string; ok: boolean; summary: string; links: string[] }) => void;
   onDone: (message: ChatMessage) => void;
   onMemory: (notes: SavedMemoryNote[]) => void;
+  onCommitments: (notes: SavedCommitmentNote[]) => void;
+  onPeople: (notes: SavedPersonNote[]) => void;
 }): Promise<void> {
   const res = await fetch(`/api/conversations/${args.conversationId}/reply`, {
     method: "POST",
@@ -135,6 +159,8 @@ export async function streamReply(args: {
           else if (event.type === "tool_start") args.onToolStart(event);
           else if (event.type === "tool_result") args.onToolResult(event);
           else if (event.type === "memory") args.onMemory(event.memories);
+          else if (event.type === "commitments") args.onCommitments(event.commitments);
+          else if (event.type === "people") args.onPeople(event.people);
           else if (event.type === "done") {
             gotDone = true;
             args.onDone(event.message);
@@ -148,7 +174,7 @@ export async function streamReply(args: {
       }
     }
   } catch (err) {
-    if (gotDone) return; // the reply is complete; only the optional memory note was lost
+    if (gotDone) return; // the reply is complete; only the optional notes were lost
     throw err;
   }
 

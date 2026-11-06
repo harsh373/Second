@@ -45,6 +45,7 @@ export interface UnansweredItem {
   subject: string;
   sourceUrl: string;
   lastMessage: { id: string; from: Participant | null; date: string; snippet: string };
+  counterparts: Participant[]; // needsReply: who wrote to the user. waitingOn: who the user wrote to.
   daysSince: number;
   reason: string;
 }
@@ -159,6 +160,11 @@ function collectParts(part: gmail_v1.Schema$MessagePart | undefined, acc: BodyPa
 
 function sourceUrl(accountEmail: string, threadId: string): string {
   return `https://mail.google.com/mail/?authuser=${encodeURIComponent(accountEmail)}#all/${threadId}`;
+}
+
+// True for addresses that look like no-reply / notification senders (used to keep bots out of the people list).
+export function isAutomatedAddress(email: string): boolean {
+  return AUTOMATED_SENDER.test(email);
 }
 
 function parseMessage(msg: gmail_v1.Schema$Message, account: string, withBody: boolean): GmailMessage {
@@ -295,6 +301,37 @@ export function getThread(userId: string, threadId: string): Promise<GmailThread
   });
 }
 
+// Re-reads specific threads (headers only, no bodies). A thread that no longer exists comes back as null.
+export function getThreadsMetadata(
+  userId: string,
+  threadIds: string[],
+): Promise<{ id: string; thread: GmailThread | null }[]> {
+  return callGoogle(userId, "gmail", async ({ client, integration }) => {
+    const gmail = google.gmail({ version: "v1", auth: client });
+    const account = integration.accountEmail.toLowerCase();
+    const threads = await mapLimit(threadIds, FETCH_CONCURRENCY, (id) => fetchMetadata(gmail, id, account));
+    return threadIds.map((id, i) => ({ id, thread: threads[i] ?? null }));
+  });
+}
+
+// Recent threads, headers only (no bodies), skipping promotions / social / updates / forums.
+// Used by the People refresh. Also returns the user's own address so callers can leave it out.
+export function listRecentThreads(
+  userId: string,
+  options: { sinceDays?: number | undefined; maxThreads?: number | undefined } = {},
+): Promise<{ account: string; sinceDays: number; threads: GmailThread[] }> {
+  const sinceDays = options.sinceDays ?? 30;
+  const maxThreads = options.maxThreads ?? 100;
+  return callGoogle(userId, "gmail", async ({ client, integration }) => {
+    const gmail = google.gmail({ version: "v1", auth: client });
+    const account = integration.accountEmail.toLowerCase();
+    const query = `newer_than:${sinceDays}d -category:promotions -category:social -category:updates -category:forums`;
+    const { ids } = await listThreadIds(gmail, query, maxThreads);
+    const fetched = await mapLimit(ids, FETCH_CONCURRENCY, (id) => fetchMetadata(gmail, id, account));
+    return { account, sinceDays, threads: fetched.filter((t): t is GmailThread => t !== null) };
+  });
+}
+
 export function searchByPerson(userId: string, person: string, maxResults = 15) {
   const cleaned = person.replace(/["()\\]/g, " ").trim();
   const term = cleaned.includes("@") ? cleaned : `"${cleaned}"`;
@@ -331,13 +368,19 @@ export function findUnansweredThreads(userId: string, options: UnansweredOptions
     const needsReply: UnansweredItem[] = [];
     const waitingOn: UnansweredItem[] = [];
 
-    const toItem = (t: GmailThread, last: GmailMessage, reason: string): UnansweredItem | null => {
+    const toItem = (
+      t: GmailThread,
+      last: GmailMessage,
+      reason: string,
+      counterparts: Participant[],
+    ): UnansweredItem | null => {
       if (!last.date) return null;
       return {
         threadId: t.id,
         subject: t.subject,
         sourceUrl: t.sourceUrl,
         lastMessage: { id: last.id, from: last.from, date: last.date, snippet: last.snippet },
+        counterparts,
         daysSince: Math.floor((now - Date.parse(last.date)) / DAY_MS),
         reason,
       };
@@ -358,6 +401,7 @@ export function findUnansweredThreads(userId: string, options: UnansweredOptions
         t,
         last,
         `Latest message is from ${who} (${last.date?.slice(0, 10)}), you are a direct recipient, and you have not replied since.`,
+        last.from ? [last.from] : [],
       );
       if (item) needsReply.push(item);
     }
@@ -379,6 +423,7 @@ export function findUnansweredThreads(userId: string, options: UnansweredOptions
         t,
         last,
         `You sent the latest message to ${names} on ${last.date.slice(0, 10)} and there has been no reply for at least ${waitingDays} days.`,
+        recipients,
       );
       if (item) waitingOn.push(item);
     }

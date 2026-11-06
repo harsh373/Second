@@ -57,22 +57,26 @@ const MAX_MESSAGE_CHARS = 2000; // longer messages are mostly pasted text, not t
 const MAX_SAVED_PER_MESSAGE = 3;
 const NOTES_SHOWN_TO_EXTRACTOR = 60;
 
+// People and how they relate to the user are handled by the People feature, not by memory.
+const EXTRACTED_CATEGORIES = MEMORY_CATEGORIES.filter((c) => c !== "relationships");
+
 const EXTRACTOR_PROMPT = [
   "You decide what a personal secretary app should remember about its user for the long term.",
   "",
   "You are given NOTES (what the app already remembers, numbered) and MESSAGE (the user's latest message).",
   "",
-  "Extract only durable facts that the user states about themselves in MESSAGE, in their own words. Durable means it will probably still be true and useful weeks from now: who they are, stable preferences, goals, the people in their life and how they relate to them, ongoing responsibilities, and important history.",
+  "Extract only durable facts that the user states about themselves in MESSAGE, in their own words. Durable means it will probably still be true and useful weeks from now: who they are, stable preferences, goals, ongoing responsibilities, and important history.",
   "",
   "Do NOT extract:",
   "- Anything the user did not state. Never guess, infer or speculate, and never guess other people's feelings or intentions.",
   "- One-off tasks, questions, requests, plans for today, or moods.",
+  "- Who other people are or how they relate to the user (for example \"Rahul is my project partner\"). A separate feature handles that.",
   "- Text the user pasted or quoted from someone else (emails, messages, documents). Only the user's own statements about themselves count.",
   "- Passwords, keys, tokens, card or ID numbers, or any other secret.",
   "- Health, sexuality, religion, politics or similar sensitive details, unless the user explicitly asks you to remember them.",
   "- Anything a note already covers.",
   "",
-  `Categories: ${MEMORY_CATEGORIES.join(", ")}.`,
+  `Categories: ${EXTRACTED_CATEGORIES.join(", ")}.`,
   "",
   'Write each fact as one short, plain statement about the user, under 160 characters, in the same language as MESSAGE. Examples: "Prefers morning meetings", "Wants to finish a thesis this year".',
   'If MESSAGE changes or contradicts a note, return the new fact with "replaces" set to that note\'s number. Otherwise set "replaces" to null.',
@@ -162,6 +166,7 @@ export async function extractMemories(input: {
       if (saved.length >= MAX_SAVED_PER_MESSAGE) break;
       const candidate = candidateSchema.safeParse(item);
       if (!candidate.success) continue;
+      if (candidate.data.category === "relationships") continue; // owned by the People feature now
 
       const content = candidate.data.content.replace(/\s+/g, " ").trim();
       if (checkMemoryContent(content) !== null) continue;

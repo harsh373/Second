@@ -13,7 +13,9 @@ import {
   type Message,
 } from "../model/conversation.model";
 import { runAgent, type ChatTurn } from "../orchestration/chatGraph";
+import { extractCommitments } from "../orchestration/commitments";
 import { extractMemories, retrieveMemories } from "../orchestration/memory";
+import { extractRelationships } from "../orchestration/people";
 import { MODEL_NAME } from "../orchestration/providers/llm";
 import { AppError } from "../utility/AppError";
 import { logger } from "../utility/logger";
@@ -220,15 +222,28 @@ export async function reply(req: Request, res: Response) {
     status = "completed";
     send({ type: "done", message: messageDto(saved) });
 
-    // The reply is already delivered. Memory extraction is best effort and never throws.
-    // It is not tied to the abort signal, so it still finishes if the user navigates away.
-    const notes = await extractMemories({
-      userId: user.id,
-      conversationId: conversation.id,
-      messageId: userMessage.id,
-      message: userMessage.content,
-    });
+    // The reply is already delivered. All three extractors only ever see the user's own message,
+    // run in parallel, are best effort and never throw. They are not tied to the abort signal,
+    // so they still finish if the user navigates away.
+    const [notes, tracked, related] = await Promise.all([
+      extractMemories({
+        userId: user.id,
+        conversationId: conversation.id,
+        messageId: userMessage.id,
+        message: userMessage.content,
+      }),
+      extractCommitments({
+        userId: user.id,
+        conversationId: conversation.id,
+        messageId: userMessage.id,
+        message: userMessage.content,
+        timezone: profile.timezone,
+      }),
+      extractRelationships({ userId: user.id, message: userMessage.content }),
+    ]);
     if (notes.length > 0) send({ type: "memory", memories: notes });
+    if (tracked.length > 0) send({ type: "commitments", commitments: tracked });
+    if (related.length > 0) send({ type: "people", people: related });
   } catch (err) {
     if (!abort.signal.aborted) {
       status = "failed";

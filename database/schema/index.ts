@@ -5,3 +5,6 @@ export * from "./integrations";
 export * from "./conversations";
 export * from "./agent";
 export * from "./memory";
+export * from "./commitments";
+export * from "./open-loops";
+export * from "./people";
