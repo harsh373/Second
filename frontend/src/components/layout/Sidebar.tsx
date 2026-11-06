@@ -9,6 +9,7 @@ import {
   Newspaper,
   Palette,
   Settings,
+  ShieldCheck,
   Users,
   X,
   type LucideIcon,
@@ -30,6 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/app/commitments", label: "Commitments", icon: ListChecks },
   { to: "/app/open-loops", label: "Open loops", icon: Inbox },
   { to: "/app/people", label: "People", icon: Users },
+  { to: "/app/delegations", label: "Delegations", icon: ShieldCheck },
   { to: "/app/memory", label: "Memory", icon: Brain },
   { to: "/app/settings", label: "Settings", icon: Settings },
 ];

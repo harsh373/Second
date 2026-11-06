@@ -3,6 +3,7 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { getLatestBriefing } from "../model/briefing.model";
 import { loadCommitmentViews, todayForUser, type CommitmentView } from "../model/commitment.model";
+import { listDelegationViews } from "../model/delegation.model";
 import { getLastScanAt, listActiveLoops } from "../model/openLoop.model";
 import { loadPeopleViews, type PersonView } from "../model/people.model";
 import { AppError } from "../utility/AppError";
@@ -451,6 +452,39 @@ const getLatestBriefingTool = tool(
   },
 );
 
+// ---- Delegations (what the user authorized on the Delegations page; a record only, read-only) ----
+
+const listDelegationsTool = tool(
+  async ({ includeEnded }, config) => {
+    const { today, delegations } = await listDelegationViews(userIdOf(config));
+    const shown = includeEnded ? delegations : delegations.filter((d) => d.status === "active" || d.status === "paused");
+    return limit({
+      today,
+      note: "These are records of what the user authorized, typed by the user on the Delegations page. NOTHING EXECUTES YET: no action is taken under any delegation, and you have no tools that act. Only status active counts. Paused, revoked and expired delegations grant nothing.",
+      count: shown.length,
+      delegations: shown.map((d) => ({
+        responsibility: d.responsibility,
+        scope: d.scope,
+        trigger: d.trigger,
+        authority: d.authority,
+        status: d.status,
+        reviewAt: d.reviewAt,
+        grantedAt: d.createdAt.toISOString(),
+        authorizedTools: d.tools,
+        restrictions: d.restrictions,
+      })),
+    });
+  },
+  {
+    name: "list_delegations",
+    description:
+      "List what the user has authorized you to take care of on their Delegations page: responsibility, scope, trigger, authority level, authorized tools, restrictions and review date. Use it for 'what have I authorized you to do' or 'what are my delegations'. It is a record only: nothing executes yet, and you cannot create or change delegations. Read-only.",
+    schema: z.object({
+      includeEnded: z.boolean().optional().describe("Also include revoked and expired delegations. Default false."),
+    }),
+  },
+);
+
 export const agentTools = [
   searchThreadsTool,
   getThreadTool,
@@ -466,6 +500,7 @@ export const agentTools = [
   listPeopleTool,
   getPersonTool,
   getLatestBriefingTool,
+  listDelegationsTool,
 ];
 
 // ---- Helpers the graph uses to describe calls and results to the user (not the model) ----
@@ -507,6 +542,8 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
       return "Opening a person";
     case "get_latest_briefing":
       return "Opening your latest briefing";
+    case "list_delegations":
+      return "Checking your delegations";
     default:
       return `Running ${name}`;
   }

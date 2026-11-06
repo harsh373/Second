@@ -9,3 +9,4 @@ export * from "./commitments";
 export * from "./open-loops";
 export * from "./people";
 export * from "./briefings";
+export * from "./delegations";

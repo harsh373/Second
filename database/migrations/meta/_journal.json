@@ -64,6 +64,13 @@
       "when": 1793948821573,
       "tag": "0008_bizarre_random",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793950427098,
+      "tag": "0009_lazy_lockjaw",
+      "breakpoints": true
     }
   ]
 }

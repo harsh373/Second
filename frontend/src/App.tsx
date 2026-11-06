@@ -5,6 +5,7 @@ import { Toaster } from "./components/ui/Toast";
 import Briefings from "./pages/Briefings";
 import Chat from "./pages/Chat";
 import Commitments from "./pages/Commitments";
+import Delegations from "./pages/Delegations";
 import Desk from "./pages/Desk";
 import Design from "./pages/Design";
 import GoogleDebug from "./pages/GoogleDebug";
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="commitments" element={<Commitments />} />
             <Route path="open-loops" element={<OpenLoops />} />
             <Route path="people" element={<People />} />
+            <Route path="delegations" element={<Delegations />} />
             <Route path="memory" element={<Memory />} />
             <Route path="settings" element={<Settings />} />
             <Route path="design" element={<Design />} />
