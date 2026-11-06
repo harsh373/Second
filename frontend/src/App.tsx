@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { AppShell } from "./components/layout/AppShell";
 import { Toaster } from "./components/ui/Toast";
+import Briefings from "./pages/Briefings";
 import Chat from "./pages/Chat";
 import Commitments from "./pages/Commitments";
 import Desk from "./pages/Desk";
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/app" element={<AppShell />}>
             <Route index element={<Desk />} />
             <Route path="chat/:conversationId?" element={<Chat />} />
+            <Route path="briefings" element={<Briefings />} />
             <Route path="commitments" element={<Commitments />} />
             <Route path="open-loops" element={<OpenLoops />} />
             <Route path="people" element={<People />} />

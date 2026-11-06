@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   ListChecks,
   MessageSquare,
+  Newspaper,
   Palette,
   Settings,
   Users,
@@ -25,6 +26,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: "/app", label: "Desk", icon: LayoutDashboard, end: true },
   { to: "/app/chat", label: "Chat", icon: MessageSquare },
+  { to: "/app/briefings", label: "Briefings", icon: Newspaper },
   { to: "/app/commitments", label: "Commitments", icon: ListChecks },
   { to: "/app/open-loops", label: "Open loops", icon: Inbox },
   { to: "/app/people", label: "People", icon: Users },

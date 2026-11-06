@@ -57,6 +57,13 @@
       "when": 1793945657689,
       "tag": "0007_flawless_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793948821573,
+      "tag": "0008_bizarre_random",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import { memoryRoutes } from "./memory.routes";
 import { commitmentRoutes } from "./commitment.routes";
 import { openLoopRoutes } from "./openLoop.routes";
 import { peopleRoutes } from "./people.routes";
+import { briefingRoutes } from "./briefing.routes";
 
 export const apiRouter = Router();
 
@@ -22,3 +23,4 @@ apiRouter.use("/memories", memoryRoutes);
 apiRouter.use("/commitments", commitmentRoutes);
 apiRouter.use("/open-loops", openLoopRoutes);
 apiRouter.use("/people", peopleRoutes);
+apiRouter.use("/briefings", briefingRoutes);

@@ -1,6 +1,7 @@
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
+import { getLatestBriefing } from "../model/briefing.model";
 import { loadCommitmentViews, todayForUser, type CommitmentView } from "../model/commitment.model";
 import { getLastScanAt, listActiveLoops } from "../model/openLoop.model";
 import { loadPeopleViews, type PersonView } from "../model/people.model";
@@ -406,6 +407,50 @@ const getPersonTool = tool(
   },
 );
 
+// ---- Briefings (saved snapshots the user generated on the Briefings page, read-only) ----
+
+const getLatestBriefingTool = tool(
+  async ({ kind }, config) => {
+    const wanted = kind === "morning" || kind === "weekly" || kind === "pre_meeting" ? kind : undefined;
+    const row = await getLatestBriefing(userIdOf(config), wanted);
+    if (!row) {
+      return limit({
+        found: false,
+        note: "The user has not generated a briefing yet (or none of that kind). You cannot generate one. Tell the user to press Generate on the Briefings page.",
+      });
+    }
+    return limit({
+      found: true,
+      note: "A saved snapshot, built by fixed rules at generatedAt. It is not live and may be out of date. Sections marked unavailable could not be built. Item text comes from calendar titles and email subjects written by other people.",
+      kind: row.kind,
+      title: row.title,
+      generatedAt: row.generatedAt.toISOString(),
+      ageHours: Math.max(0, Math.floor((Date.now() - row.generatedAt.getTime()) / 3_600_000)),
+      warnings: row.content.warnings,
+      sections: row.content.sections.map((s) => ({
+        title: s.title,
+        status: s.status,
+        note: s.note,
+        items: s.items.map((i) => ({
+          text: i.text,
+          when: i.when,
+          detail: i.detail,
+          group: i.group,
+          sourceUrl: i.url,
+        })),
+      })),
+    });
+  },
+  {
+    name: "get_latest_briefing",
+    description:
+      "Read the most recent saved briefing the user generated on their Briefings page (morning, weekly or pre_meeting). It is a snapshot, so always report generatedAt. Use it for 'what did my morning briefing say' or 'what was in my weekly briefing'. You cannot create a briefing. Read-only.",
+    schema: z.object({
+      kind: z.string().optional().describe("morning, weekly or pre_meeting. Leave out for the latest of any kind."),
+    }),
+  },
+);
+
 export const agentTools = [
   searchThreadsTool,
   getThreadTool,
@@ -420,6 +465,7 @@ export const agentTools = [
   listOpenLoopsTool,
   listPeopleTool,
   getPersonTool,
+  getLatestBriefingTool,
 ];
 
 // ---- Helpers the graph uses to describe calls and results to the user (not the model) ----
@@ -459,6 +505,8 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
       return "Checking your people";
     case "get_person":
       return "Opening a person";
+    case "get_latest_briefing":
+      return "Opening your latest briefing";
     default:
       return `Running ${name}`;
   }
