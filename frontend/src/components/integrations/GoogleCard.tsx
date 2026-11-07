@@ -121,7 +121,11 @@ export function GoogleCard() {
     if (code && state) completeConnect({ code, state });
   }, [params, setParams, completeConnect]);
 
-  const missingPermission = google && (!google.permissions.gmail || !google.permissions.calendar);
+  // The draft permission was added after the first release, so an older connection may lack it.
+  const draftsGranted = google
+    ? "gmailDrafts" in google.permissions && google.permissions.gmailDrafts === true
+    : false;
+  const missingPermission = google && (!google.permissions.gmail || !google.permissions.calendar || !draftsGranted);
 
   let body: ReactNode;
 
@@ -146,13 +150,20 @@ export function GoogleCard() {
       <>
         <p className="text-sm text-ink-muted">Connect Google so Second can understand your inbox and schedule.</p>
         <ul className="mt-5 space-y-4">
-          <PermissionRow icon={<Mail className="size-4" />} title="Read your email" text="Gmail, read-only." />
+          <PermissionRow icon={<Mail className="size-4" />} title="Read your email" text="Gmail, for reading." />
+          <PermissionRow
+            icon={<Mail className="size-4" />}
+            title="Create reply drafts, and send them after you approve"
+            text="Gmail drafts. A draft is created only after you approve it on the Action Center page, and it is sent only if you press Send and approve that send too."
+          />
           <PermissionRow icon={<CalendarDays className="size-4" />} title="Read your calendar" text="Google Calendar, read-only." />
           <PermissionRow icon={<UserRound className="size-4" />} title="Know which account is connected" text="Your Google email address." />
         </ul>
         <p className="mt-5 flex items-start gap-2 text-xs text-ink-muted">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
-          Second cannot send, edit or delete anything. You can disconnect at any time.
+          Second sends an email only after you press Send on a draft you already approved and then approve that send as
+          a separate step. The AI cannot send. Second never edits or deletes your existing mail. You can disconnect at
+          any time.
         </p>
         <Button className="mt-6" loading={connect.isPending} onClick={() => connect.mutate()}>
           Connect Google
@@ -174,13 +185,20 @@ export function GoogleCard() {
         )}
 
         <ul className="mt-5 space-y-4">
-          <PermissionRow icon={<Mail className="size-4" />} title="Gmail" text="Read-only." granted={google.permissions.gmail} />
+          <PermissionRow icon={<Mail className="size-4" />} title="Gmail" text="Reading your email." granted={google.permissions.gmail} />
+          <PermissionRow
+            icon={<Mail className="size-4" />}
+            title="Gmail drafts"
+            text="Creating reply drafts after you approve them, and sending a draft only after a second approval from you."
+            granted={draftsGranted}
+          />
           <PermissionRow icon={<CalendarDays className="size-4" />} title="Calendar" text="Read-only." granted={google.permissions.calendar} />
         </ul>
 
         {missingPermission && (
           <p className="mt-4 text-xs text-warning">
-            You skipped some permissions on Google's screen. Reconnect and tick them to enable those features.
+            Some permissions are missing (you skipped them on Google's screen, or they were added later). Reconnect and
+            tick all of them to enable those features.
           </p>
         )}
 

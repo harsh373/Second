@@ -1,14 +1,17 @@
 import { listIntegrationsWithScopes, markIntegrationStatus } from "../model/integration.model";
 import { AppError } from "./AppError";
-import { SCOPE_CALENDAR, SCOPE_GMAIL, getAuthorizedClient } from "./google";
+import { SCOPE_CALENDAR, SCOPE_GMAIL, SCOPE_GMAIL_COMPOSE, getAuthorizedClient } from "./google";
 import { logger } from "./logger";
 
 export type AuthorizedGoogle = Awaited<ReturnType<typeof getAuthorizedClient>>;
 
-const REQUIRED = {
+export type GoogleResource = "gmail" | "gmail_compose" | "calendar";
+
+const REQUIRED: Record<GoogleResource, { scope: string; label: string }> = {
   gmail: { scope: SCOPE_GMAIL, label: "Gmail" },
+  gmail_compose: { scope: SCOPE_GMAIL_COMPOSE, label: "Gmail drafts" },
   calendar: { scope: SCOPE_CALENDAR, label: "Calendar" },
-} as const;
+};
 
 interface GoogleErrorShape {
   code?: unknown;
@@ -79,12 +82,8 @@ async function mapGoogleError(err: unknown, integrationId: string): Promise<AppE
   return new AppError(502, "Could not reach Google. Try again in a moment.", "GOOGLE_UNAVAILABLE");
 }
 
-// Every Gmail/Calendar read goes through here.
-export async function callGoogle<T>(
-  userId: string,
-  resource: "gmail" | "calendar",
-  fn: (auth: AuthorizedGoogle) => Promise<T>,
-): Promise<T> {
+// Checks that Google is connected, active and has the permission. It does not call Google.
+export async function requireGoogleAccess(userId: string, resource: GoogleResource): Promise<void> {
   const connections = await listIntegrationsWithScopes(userId);
   const found = connections.find((c) => c.integration.provider === "google");
   if (!found) throw new AppError(404, "Google is not connected.", "GOOGLE_NOT_CONNECTED");
@@ -100,6 +99,15 @@ export async function callGoogle<T>(
       "GOOGLE_SCOPE_MISSING",
     );
   }
+}
+
+// Every Gmail/Calendar call goes through here.
+export async function callGoogle<T>(
+  userId: string,
+  resource: GoogleResource,
+  fn: (auth: AuthorizedGoogle) => Promise<T>,
+): Promise<T> {
+  await requireGoogleAccess(userId, resource);
 
   const auth = await getAuthorizedClient(userId);
   try {

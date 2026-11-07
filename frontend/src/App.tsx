@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { AppShell } from "./components/layout/AppShell";
 import { Toaster } from "./components/ui/Toast";
+import Actions from "./pages/Actions";
 import Briefings from "./pages/Briefings";
 import Chat from "./pages/Chat";
 import Commitments from "./pages/Commitments";
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="open-loops" element={<OpenLoops />} />
             <Route path="people" element={<People />} />
             <Route path="delegations" element={<Delegations />} />
+            <Route path="actions" element={<Actions />} />
             <Route path="memory" element={<Memory />} />
             <Route path="settings" element={<Settings />} />
             <Route path="design" element={<Design />} />

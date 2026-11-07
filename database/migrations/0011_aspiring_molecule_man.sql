@@ -1,0 +1,1 @@
+ALTER TABLE "approvals" ALTER COLUMN "result_ref" SET DATA TYPE text;

@@ -200,7 +200,7 @@ function CreateForm({ today, options, onDone }: { today: string; options: Delega
   const create = useMutation({
     mutationFn: () => createDelegation({ responsibility, scope, trigger, authority, tools, restrictions, reviewAt }),
     onSuccess: () => {
-      toast.success("Delegation saved. Nothing executes yet.");
+      toast.success("Delegation saved.");
       setResponsibility("");
       setScope("");
       setTrigger("when_asked");
@@ -381,9 +381,14 @@ export default function Delegations() {
       </div>
 
       <div className="rounded-xl border border-line bg-accent-soft px-4 py-3 text-sm text-ink">
-        Nothing executes yet. Second cannot send, draft, schedule or change anything today. These are the saved rules
-        that future actions will have to follow. Permission is decided by the app, never by the AI, and only on this
-        page: what you say in chat never creates or widens a delegation.
+        These are saved rules. Three actions exist so far: tracking a commitment (Track a commitment), creating a reply
+        draft in your Gmail Drafts folder (Create a Gmail draft), and sending a draft you already created (Send an
+        email). Second can only propose the first two. Sending is a button you press yourself on a created draft, and
+        you then approve the send as a separate step. Send an email works only in a delegation with the authority
+        Execute with approval, never in a narrow delegation, and every single send needs your approval. Nothing runs
+        until you press Approve on the Action Center page. Archiving, labelling and calendar actions cannot be done yet,
+        even if you tick them. Permission is decided by the app, never by the AI, and only on this page: what you say
+        in chat never creates or widens a delegation.
       </div>
 
       {isLoading && <p className="text-sm text-ink-muted">Loading...</p>}

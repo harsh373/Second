@@ -2,6 +2,7 @@ import { Link, NavLink } from "react-router-dom";
 import {
   Brain,
   Bug,
+  ClipboardCheck,
   Inbox,
   LayoutDashboard,
   ListChecks,
@@ -32,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/app/open-loops", label: "Open loops", icon: Inbox },
   { to: "/app/people", label: "People", icon: Users },
   { to: "/app/delegations", label: "Delegations", icon: ShieldCheck },
+  { to: "/app/actions", label: "Action Center", icon: ClipboardCheck },
   { to: "/app/memory", label: "Memory", icon: Brain },
   { to: "/app/settings", label: "Settings", icon: Settings },
 ];

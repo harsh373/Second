@@ -11,6 +11,8 @@ import { openLoopRoutes } from "./openLoop.routes";
 import { peopleRoutes } from "./people.routes";
 import { briefingRoutes } from "./briefing.routes";
 import { delegationRoutes } from "./delegation.routes";
+import { approvalRoutes } from "./approval.routes";
+import { deskRoutes } from "./desk.routes";
 
 export const apiRouter = Router();
 
@@ -26,3 +28,5 @@ apiRouter.use("/open-loops", openLoopRoutes);
 apiRouter.use("/people", peopleRoutes);
 apiRouter.use("/briefings", briefingRoutes);
 apiRouter.use("/delegations", delegationRoutes);
+apiRouter.use("/approvals", approvalRoutes);
+apiRouter.use("/desk", deskRoutes);

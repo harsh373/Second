@@ -12,10 +12,12 @@ import { logger } from "./logger";
 
 export const SCOPE_EMAIL = "https://www.googleapis.com/auth/userinfo.email";
 export const SCOPE_GMAIL = "https://www.googleapis.com/auth/gmail.readonly";
+export const SCOPE_GMAIL_COMPOSE = "https://www.googleapis.com/auth/gmail.compose";
 export const SCOPE_CALENDAR = "https://www.googleapis.com/auth/calendar.readonly";
 
-// Read-only on purpose. Write access is requested later, when the features that need it exist.
-export const GOOGLE_SCOPES = ["openid", SCOPE_EMAIL, SCOPE_GMAIL, SCOPE_CALENDAR];
+// gmail.compose lets Second create reply drafts after you approve them. Google describes it as
+// "manage drafts and send emails", so the permission can also send. Second has no code that sends.
+export const GOOGLE_SCOPES = ["openid", SCOPE_EMAIL, SCOPE_GMAIL, SCOPE_GMAIL_COMPOSE, SCOPE_CALENDAR];
 
 export function createOAuthClient() {
   return new google.auth.OAuth2(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, env.GOOGLE_REDIRECT_URI);

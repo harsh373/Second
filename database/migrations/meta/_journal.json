@@ -71,6 +71,20 @@
       "when": 1793950427098,
       "tag": "0009_lazy_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793951748296,
+      "tag": "0010_lovely_veda",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793953297156,
+      "tag": "0011_aspiring_molecule_man",
+      "breakpoints": true
     }
   ]
 }

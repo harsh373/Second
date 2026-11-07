@@ -15,6 +15,7 @@ import {
   revokeGoogleToken,
   SCOPE_CALENDAR,
   SCOPE_GMAIL,
+  SCOPE_GMAIL_COMPOSE,
   verifyGoogleAccess,
 } from "../utility/google";
 import { logger } from "../utility/logger";
@@ -33,6 +34,7 @@ function toSummary(integration: Integration, scopes: string[]) {
     connectedAt: integration.connectedAt,
     permissions: {
       gmail: scopes.includes(SCOPE_GMAIL),
+      gmailDrafts: scopes.includes(SCOPE_GMAIL_COMPOSE),
       calendar: scopes.includes(SCOPE_CALENDAR),
     },
   };
